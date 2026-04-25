@@ -86,22 +86,21 @@ export default function VideoMeetComponent() {
                         }
                     };
 
-                    connections[socketListId].ontrack = (event) => {
-                        console.log("TRACK RECEIVED FROM:", socketListId);
+                  connections[socketListId].ontrack = (event) => {
+    console.log("TRACK RECEIVED FROM:", socketListId);
 
-                        const stream = event.streams[0];
+    const stream = event.streams[0];
 
-                        setVideos(prev => {
-                            const exists = prev.find(v => v.socketId === socketListId);
-                            if (exists) {
-                                return prev.map(v =>
-                                    v.socketId === socketListId ? { ...v, stream } : v
-                                );
-                            } else {
-                                return [...prev, { socketId: socketListId, stream }];
-                            }
-                        });
-                    };
+    setVideos(prev => {
+        if (prev.find(v => v.socketId === socketListId)) {
+            return prev.map(v =>
+                v.socketId === socketListId ? { ...v, stream } : v
+            );
+        } else {
+            return [...prev, { socketId: socketListId, stream }];
+        }
+    });
+};
 
                     if (window.localStream) {
                         window.localStream.getTracks().forEach(track => {
