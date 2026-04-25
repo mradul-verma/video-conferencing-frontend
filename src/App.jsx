@@ -5,8 +5,8 @@ import { AuthProvider } from './contexts/AuthContext';
 import LandingPage from './pages/Landing';
 import Authentication from './pages/Authentication';
 import VideoMeetComponent from './pages/VideoMeet';
-import HomeComponent from './pages/Home';
-import History from './pages/History';
+import HomeComponent from './pages/home';
+import History from './pages/history';
 
 function App() {
   return (
