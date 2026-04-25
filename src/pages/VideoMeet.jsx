@@ -5,13 +5,19 @@ import styles from "../styles/videoComponent.module.css";
 import server from '../environment';
 
 const server_url = server;
-var connections = {};
+let connections = {};
 
 const peerConfigConnections = {
     iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
         {
             urls: "turn:openrelay.metered.ca:80",
+            username: "openrelayproject",
+            credential: "openrelayproject"
+        },
+        {
+            urls: "turn:openrelay.metered.ca:443",
             username: "openrelayproject",
             credential: "openrelayproject"
         }
@@ -27,9 +33,6 @@ export default function VideoMeetComponent() {
     const [videos, setVideos] = useState([]);
     const [username, setUsername] = useState("");
     const [askForUsername, setAskForUsername] = useState(true);
-
-    const [message, setMessage] = useState("");
-    const [messages, setMessages] = useState([]);
 
     useEffect(() => {
         getPermissions();
@@ -48,12 +51,15 @@ export default function VideoMeetComponent() {
     };
 
     const connectToSocketServer = () => {
+
         socketRef.current = io(server_url, {
             transports: ["websocket"],
-            secure: true
+            upgrade: false,
+            reconnection: true
         });
 
         socketRef.current.on("connect", () => {
+            console.log("SOCKET CONNECTED");
 
             const roomId = window.location.pathname;
             socketRef.current.emit("join-call", roomId);
@@ -61,10 +67,6 @@ export default function VideoMeetComponent() {
             socketIdRef.current = socketRef.current.id;
 
             socketRef.current.on("signal", gotMessageFromServer);
-
-            socketRef.current.on("chat-message", (data, sender) => {
-                setMessages(prev => [...prev, { sender, data }]);
-            });
 
             socketRef.current.on("user-left", (id) => {
                 setVideos(v => v.filter(video => video.socketId !== id));
@@ -74,6 +76,8 @@ export default function VideoMeetComponent() {
 
                 clients.forEach(socketListId => {
 
+                    if (socketListId === socketIdRef.current) return;
+
                     connections[socketListId] = new RTCPeerConnection(peerConfigConnections);
 
                     connections[socketListId].onicecandidate = (event) => {
@@ -82,12 +86,14 @@ export default function VideoMeetComponent() {
                         }
                     };
 
-                    // FIXED STREAM HANDLING
                     connections[socketListId].ontrack = (event) => {
-                        let stream = event.streams[0];
+                        console.log("TRACK RECEIVED FROM:", socketListId);
+
+                        const stream = event.streams[0];
 
                         setVideos(prev => {
-                            if (prev.find(v => v.socketId === socketListId)) {
+                            const exists = prev.find(v => v.socketId === socketListId);
+                            if (exists) {
                                 return prev.map(v =>
                                     v.socketId === socketListId ? { ...v, stream } : v
                                 );
@@ -122,6 +128,7 @@ export default function VideoMeetComponent() {
     };
 
     const gotMessageFromServer = (fromId, message) => {
+
         const signal = JSON.parse(message);
 
         if (fromId === socketIdRef.current) return;
@@ -145,17 +152,14 @@ export default function VideoMeetComponent() {
                             JSON.stringify({ sdp: connections[fromId].localDescription })
                         );
                     }
-                });
+                })
+                .catch(e => console.log(e));
         }
 
         if (signal.ice) {
-            connections[fromId].addIceCandidate(new RTCIceCandidate(signal.ice));
+            connections[fromId].addIceCandidate(new RTCIceCandidate(signal.ice))
+                .catch(e => console.log(e));
         }
-    };
-
-    const sendMessage = () => {
-        socketRef.current.emit("chat-message", message, username);
-        setMessage("");
     };
 
     const connect = () => {
@@ -198,11 +202,6 @@ export default function VideoMeetComponent() {
                                 className={styles.remoteVideo}
                             />
                         ))}
-                    </div>
-
-                    <div className={styles.chatBox}>
-                        <TextField value={message} onChange={e => setMessage(e.target.value)} />
-                        <Button onClick={sendMessage}>Send</Button>
                     </div>
 
                 </div>
