@@ -72,32 +72,32 @@ export default function VideoMeetComponent() {
                 setVideos(v => v.filter(video => video.socketId !== id));
             });
 
-            socketRef.current.on("user-joined", (id, clients) => {
-    console.log("USER JOINED:", id, clients);
+          socketRef.current.on("user-joined", (id, clients) => {
 
     clients.forEach(socketListId => {
 
         if (socketListId === socketIdRef.current) return;
-
-        // 🔥 already connection hai to skip
         if (connections[socketListId]) return;
 
-        connections[socketListId] = new RTCPeerConnection(peerConfigConnections);
+        const pc = new RTCPeerConnection(peerConfigConnections);
+        connections[socketListId] = pc;
 
-        connections[socketListId].onicecandidate = (event) => {
+        pc.onicecandidate = (event) => {
             if (event.candidate) {
-                socketRef.current.emit("signal", socketListId, JSON.stringify({ ice: event.candidate }));
+                socketRef.current.emit("signal", socketListId,
+                    JSON.stringify({ ice: event.candidate })
+                );
             }
         };
 
-        // ✅ FIXED TRACK
-        connections[socketListId].ontrack = (event) => {
+        pc.ontrack = (event) => {
             console.log("TRACK RECEIVED FROM:", socketListId);
 
             const stream = event.streams[0];
 
             setVideos(prev => {
-                if (prev.find(v => v.socketId === socketListId)) {
+                const exists = prev.find(v => v.socketId === socketListId);
+                if (exists) {
                     return prev.map(v =>
                         v.socketId === socketListId ? { ...v, stream } : v
                     );
@@ -107,26 +107,30 @@ export default function VideoMeetComponent() {
             });
         };
 
-        // ✅ add local stream
         if (window.localStream) {
             window.localStream.getTracks().forEach(track => {
-                connections[socketListId].addTrack(track, window.localStream);
+                pc.addTrack(track, window.localStream);
             });
         }
     });
 
-    // 🔥 OFFER CREATE (THIS IS CRITICAL)
-    if (id === socketIdRef.current) {
-        Object.keys(connections).forEach(id2 => {
-            if (id2 === socketIdRef.current) return;
+    // 🔥 ONLY LAST USER SENDS OFFER (NO COLLISION)
+    const isLastUser = clients[clients.length - 1] === socketIdRef.current;
 
-            connections[id2].createOffer()
-                .then(d => connections[id2].setLocalDescription(d))
+    if (isLastUser) {
+        Object.keys(connections).forEach(peerId => {
+
+            const pc = connections[peerId];
+            if (!pc) return;
+
+            pc.createOffer()
+                .then(d => pc.setLocalDescription(d))
                 .then(() => {
-                    socketRef.current.emit("signal", id2,
-                        JSON.stringify({ sdp: connections[id2].localDescription })
+                    socketRef.current.emit("signal", peerId,
+                        JSON.stringify({ sdp: pc.localDescription })
                     );
-                });
+                })
+                .catch(e => console.log(e));
         });
     }
 });
