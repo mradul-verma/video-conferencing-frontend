@@ -73,56 +73,63 @@ export default function VideoMeetComponent() {
             });
 
             socketRef.current.on("user-joined", (id, clients) => {
+    console.log("USER JOINED:", id, clients);
 
-                clients.forEach(socketListId => {
+    clients.forEach(socketListId => {
 
-                    if (socketListId === socketIdRef.current) return;
+        if (socketListId === socketIdRef.current) return;
 
-                    connections[socketListId] = new RTCPeerConnection(peerConfigConnections);
+        // 🔥 already connection hai to skip
+        if (connections[socketListId]) return;
 
-                    connections[socketListId].onicecandidate = (event) => {
-                        if (event.candidate) {
-                            socketRef.current.emit("signal", socketListId, JSON.stringify({ ice: event.candidate }));
-                        }
-                    };
+        connections[socketListId] = new RTCPeerConnection(peerConfigConnections);
 
-                  connections[socketListId].ontrack = (event) => {
-    console.log("TRACK RECEIVED FROM:", socketListId);
+        connections[socketListId].onicecandidate = (event) => {
+            if (event.candidate) {
+                socketRef.current.emit("signal", socketListId, JSON.stringify({ ice: event.candidate }));
+            }
+        };
 
-    const stream = event.streams[0];
+        // ✅ FIXED TRACK
+        connections[socketListId].ontrack = (event) => {
+            console.log("TRACK RECEIVED FROM:", socketListId);
 
-    setVideos(prev => {
-        if (prev.find(v => v.socketId === socketListId)) {
-            return prev.map(v =>
-                v.socketId === socketListId ? { ...v, stream } : v
-            );
-        } else {
-            return [...prev, { socketId: socketListId, stream }];
-        }
-    });
-};
+            const stream = event.streams[0];
 
-                    if (window.localStream) {
-                        window.localStream.getTracks().forEach(track => {
-                            connections[socketListId].addTrack(track, window.localStream);
-                        });
-                    }
-                });
-
-                if (id === socketIdRef.current) {
-                    Object.keys(connections).forEach(id2 => {
-                        if (id2 === socketIdRef.current) return;
-
-                        connections[id2].createOffer()
-                            .then(d => connections[id2].setLocalDescription(d))
-                            .then(() => {
-                                socketRef.current.emit("signal", id2,
-                                    JSON.stringify({ sdp: connections[id2].localDescription })
-                                );
-                            });
-                    });
+            setVideos(prev => {
+                if (prev.find(v => v.socketId === socketListId)) {
+                    return prev.map(v =>
+                        v.socketId === socketListId ? { ...v, stream } : v
+                    );
+                } else {
+                    return [...prev, { socketId: socketListId, stream }];
                 }
             });
+        };
+
+        // ✅ add local stream
+        if (window.localStream) {
+            window.localStream.getTracks().forEach(track => {
+                connections[socketListId].addTrack(track, window.localStream);
+            });
+        }
+    });
+
+    // 🔥 OFFER CREATE (THIS IS CRITICAL)
+    if (id === socketIdRef.current) {
+        Object.keys(connections).forEach(id2 => {
+            if (id2 === socketIdRef.current) return;
+
+            connections[id2].createOffer()
+                .then(d => connections[id2].setLocalDescription(d))
+                .then(() => {
+                    socketRef.current.emit("signal", id2,
+                        JSON.stringify({ sdp: connections[id2].localDescription })
+                    );
+                });
+        });
+    }
+});
         });
     };
 
