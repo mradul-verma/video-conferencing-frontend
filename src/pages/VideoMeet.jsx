@@ -5,7 +5,6 @@ import styles from "../styles/videoComponent.module.css";
 import server from '../environment';
 
 const server_url = server;
-
 var connections = {};
 
 const peerConfigConnections = {
@@ -28,7 +27,9 @@ export default function VideoMeetComponent() {
     const [videos, setVideos] = useState([]);
     const [username, setUsername] = useState("");
     const [askForUsername, setAskForUsername] = useState(true);
+
     const [message, setMessage] = useState("");
+    const [messages, setMessages] = useState([]);
 
     useEffect(() => {
         getPermissions();
@@ -47,9 +48,9 @@ export default function VideoMeetComponent() {
     };
 
     const connectToSocketServer = () => {
-
         socketRef.current = io(server_url, {
-            transports: ["websocket"]
+            transports: ["websocket"],
+            secure: true
         });
 
         socketRef.current.on("connect", () => {
@@ -60,6 +61,10 @@ export default function VideoMeetComponent() {
             socketIdRef.current = socketRef.current.id;
 
             socketRef.current.on("signal", gotMessageFromServer);
+
+            socketRef.current.on("chat-message", (data, sender) => {
+                setMessages(prev => [...prev, { sender, data }]);
+            });
 
             socketRef.current.on("user-left", (id) => {
                 setVideos(v => v.filter(video => video.socketId !== id));
@@ -77,6 +82,7 @@ export default function VideoMeetComponent() {
                         }
                     };
 
+                    // FIXED STREAM HANDLING
                     connections[socketListId].ontrack = (event) => {
                         let stream = event.streams[0];
 
@@ -116,7 +122,6 @@ export default function VideoMeetComponent() {
     };
 
     const gotMessageFromServer = (fromId, message) => {
-
         const signal = JSON.parse(message);
 
         if (fromId === socketIdRef.current) return;
@@ -140,13 +145,17 @@ export default function VideoMeetComponent() {
                             JSON.stringify({ sdp: connections[fromId].localDescription })
                         );
                     }
-                })
-                .catch(e => console.log(e));
+                });
         }
 
         if (signal.ice) {
             connections[fromId].addIceCandidate(new RTCIceCandidate(signal.ice));
         }
+    };
+
+    const sendMessage = () => {
+        socketRef.current.emit("chat-message", message, username);
+        setMessage("");
     };
 
     const connect = () => {
@@ -155,21 +164,27 @@ export default function VideoMeetComponent() {
     };
 
     return (
-        <div>
+        <div className={styles.container}>
 
             {askForUsername ? (
-                <div>
+                <div className={styles.lobby}>
                     <h2>Enter Lobby</h2>
                     <TextField value={username} onChange={e => setUsername(e.target.value)} />
-                    <Button onClick={connect}>Join</Button>
-                    <video ref={localVideoref} autoPlay muted playsInline />
+                    <Button variant="contained" onClick={connect}>Join</Button>
+                    <video ref={localVideoref} autoPlay muted playsInline className={styles.preview}/>
                 </div>
             ) : (
-                <div className={styles.meetVideoContainer}>
+                <div className={styles.meet}>
 
-                    <video ref={localVideoref} autoPlay muted playsInline />
+                    <video ref={localVideoref} autoPlay muted playsInline className={styles.mainVideo}/>
 
-                    <div>
+                    {videos.length === 0 && (
+                        <h2 className={styles.waitingText}>
+                            Waiting for others to join...
+                        </h2>
+                    )}
+
+                    <div className={styles.grid}>
                         {videos.map(v => (
                             <video
                                 key={v.socketId}
@@ -180,8 +195,14 @@ export default function VideoMeetComponent() {
                                         ref.srcObject = v.stream;
                                     }
                                 }}
+                                className={styles.remoteVideo}
                             />
                         ))}
+                    </div>
+
+                    <div className={styles.chatBox}>
+                        <TextField value={message} onChange={e => setMessage(e.target.value)} />
+                        <Button onClick={sendMessage}>Send</Button>
                     </div>
 
                 </div>
