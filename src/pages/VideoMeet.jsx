@@ -1,18 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
 import io from "socket.io-client";
-import { Badge, IconButton, TextField, Button } from '@mui/material';
-import VideocamIcon from '@mui/icons-material/Videocam';
-import VideocamOffIcon from '@mui/icons-material/VideocamOff'
+import { TextField, Button } from '@mui/material';
 import styles from "../styles/videoComponent.module.css";
-import CallEndIcon from '@mui/icons-material/CallEnd'
-import MicIcon from '@mui/icons-material/Mic'
-import MicOffIcon from '@mui/icons-material/MicOff'
-import ScreenShareIcon from '@mui/icons-material/ScreenShare';
-import StopScreenShareIcon from '@mui/icons-material/StopScreenShare'
-import ChatIcon from '@mui/icons-material/Chat'
 import server from '../environment';
 
 const server_url = server;
+
 var connections = {};
 
 const peerConfigConnections = {
@@ -32,16 +25,9 @@ export default function VideoMeetComponent() {
     const socketIdRef = useRef();
     const localVideoref = useRef();
 
-    const [videoAvailable, setVideoAvailable] = useState(true);
-    const [audioAvailable, setAudioAvailable] = useState(true);
-
     const [videos, setVideos] = useState([]);
-    const videoRef = useRef([]);
-
     const [username, setUsername] = useState("");
     const [askForUsername, setAskForUsername] = useState(true);
-
-    const [messages, setMessages] = useState([]);
     const [message, setMessage] = useState("");
 
     useEffect(() => {
@@ -52,7 +38,9 @@ export default function VideoMeetComponent() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
             window.localStream = stream;
-            localVideoref.current.srcObject = stream;
+            if (localVideoref.current) {
+                localVideoref.current.srcObject = stream;
+            }
         } catch (e) {
             console.log(e);
         }
@@ -61,8 +49,7 @@ export default function VideoMeetComponent() {
     const connectToSocketServer = () => {
 
         socketRef.current = io(server_url, {
-            transports: ["websocket"],
-            secure: true
+            transports: ["websocket"]
         });
 
         socketRef.current.on("connect", () => {
@@ -73,8 +60,6 @@ export default function VideoMeetComponent() {
             socketIdRef.current = socketRef.current.id;
 
             socketRef.current.on("signal", gotMessageFromServer);
-
-            socketRef.current.on("chat-message", addMessage);
 
             socketRef.current.on("user-left", (id) => {
                 setVideos(v => v.filter(video => video.socketId !== id));
@@ -93,8 +78,7 @@ export default function VideoMeetComponent() {
                     };
 
                     connections[socketListId].ontrack = (event) => {
-                        const stream = new MediaStream();
-                        stream.addTrack(event.track);
+                        let stream = event.streams[0];
 
                         setVideos(prev => {
                             if (prev.find(v => v.socketId === socketListId)) {
@@ -165,15 +149,6 @@ export default function VideoMeetComponent() {
         }
     };
 
-    const addMessage = (data, sender) => {
-        setMessages(prev => [...prev, { sender, data }]);
-    };
-
-    const sendMessage = () => {
-        socketRef.current.emit("chat-message", message, username);
-        setMessage("");
-    };
-
     const connect = () => {
         setAskForUsername(false);
         connectToSocketServer();
@@ -187,30 +162,26 @@ export default function VideoMeetComponent() {
                     <h2>Enter Lobby</h2>
                     <TextField value={username} onChange={e => setUsername(e.target.value)} />
                     <Button onClick={connect}>Join</Button>
-                    <video ref={localVideoref} autoPlay muted />
+                    <video ref={localVideoref} autoPlay muted playsInline />
                 </div>
             ) : (
                 <div className={styles.meetVideoContainer}>
 
-                    <video ref={localVideoref} autoPlay muted />
+                    <video ref={localVideoref} autoPlay muted playsInline />
 
                     <div>
                         {videos.map(v => (
                             <video
                                 key={v.socketId}
+                                autoPlay
+                                playsInline
                                 ref={ref => {
                                     if (ref && v.stream) {
                                         ref.srcObject = v.stream;
                                     }
                                 }}
-                                autoPlay
                             />
                         ))}
-                    </div>
-
-                    <div>
-                        <TextField value={message} onChange={e => setMessage(e.target.value)} />
-                        <Button onClick={sendMessage}>Send</Button>
                     </div>
 
                 </div>
