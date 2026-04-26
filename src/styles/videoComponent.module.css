@@ -5,6 +5,25 @@
     overflow: hidden;
 }
 
+.lobby {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    gap: 20px;
+    color: white;
+}
+
+.preview {
+    width: 300px;
+    height: 200px;
+    border-radius: 15px;
+    border: 3px solid #4fc3f7;
+    object-fit: cover;
+    margin-top: 20px;
+}
+
 .meetUserVideo {
     position: absolute;
     bottom: 110px;
@@ -112,5 +131,9 @@
 
     .meetUserVideo {
         height: 20vh;
+    }
+
+    .chatRoom {
+        width: 100%;
     }
 }
